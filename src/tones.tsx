@@ -198,7 +198,8 @@ function ToneProvider() {
         return el.mul(volume, env, filtered);
       });
     if (coreInitd) {
-      core.render(el.add(...tones));
+      const finaltone = el.add(...tones);
+      core.render(finaltone, finaltone);
     }
   }, [
     coreInitd,
