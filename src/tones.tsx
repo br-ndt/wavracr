@@ -1,6 +1,7 @@
 import { el } from "@elemaudio/core";
 import WebRenderer from "@elemaudio/web-renderer";
 import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import styles from "./tones.module.scss";
 
 type KeyPressMapType = { [key: string]: boolean };
 
@@ -63,13 +64,14 @@ function ToneProvider() {
   const [coreInitd, setCoreInitd] = useState<boolean>(false);
   const [keyPressMap, setKeyPressMap] = useState<KeyPressMapType>({});
   const [loading, setLoading] = useState<boolean>(true);
-  const [sliderValue, setSliderValue] = useState<number>(0);
+  const [sliderValue, setSliderValue] = useState<number>(50);
   const [bits, setBits] = useState(16);
   const [attackSec, setAttackSec] = useState(1);
-  const [decaySec, setDecaySec] = useState(4);
-  const [sustainAmp, setSustainAmp] = useState(1);
+  const [decaySec, setDecaySec] = useState(2);
+  const [sustainAmp, setSustainAmp] = useState(60);
   const [releaseSec, setReleaseSec] = useState(4);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0.3);
+  const [filterFreq, setFilterFreq] = useState(3000);
 
   const onVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     setVolume(parseFloat(event.target.value) / 100);
@@ -100,6 +102,10 @@ function ToneProvider() {
     },
     []
   );
+
+  const onFilterChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setFilterFreq(parseInt(event.target.value));
+  }, []);
 
   const onBitCrushSelect = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
@@ -188,12 +194,23 @@ function ToneProvider() {
         const step = Math.pow(2, bits);
         // Crunchy amplitude quantization: floor at each step, then divide back
         const crushed = el.div(el.floor(el.mul(combined, step)), step);
-        return el.mul(volume, env, crushed);
+        const filtered = el.lowpass(filterFreq, 1, crushed);
+        return el.mul(volume, env, filtered);
       });
     if (coreInitd) {
       core.render(el.add(...tones));
     }
-  }, [coreInitd, keyPressMap, volume, sliderValue, attackSec, decaySec, sustainAmp, releaseSec, bits]);
+  }, [
+    coreInitd,
+    keyPressMap,
+    volume,
+    sliderValue,
+    attackSec,
+    decaySec,
+    sustainAmp,
+    releaseSec,
+    bits,
+  ]);
 
   return (
     <>
@@ -202,72 +219,72 @@ function ToneProvider() {
       ) : (
         <>
           <h2>Race that Wav</h2>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div className={styles.settings}>
             <p>Sine</p>
             <input type="range" onChange={onSliderChange} value={sliderValue} />
             <p>Saw</p>
           </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <input
-                min="0"
-                max="100"
-                onChange={onVolumeChange}
-                type="range"
-                value={volume * 100}
-              />
-              <p>Volume {(volume * 100).toPrecision(3)}</p>
-            </div>
+          <div className={styles.settings}>
+            <input
+              min="0"
+              max="100"
+              onChange={onVolumeChange}
+              type="range"
+              value={volume * 100}
+            />
+            <p>Volume {(volume * 100).toPrecision(3)}</p>
           </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <input
-                min="0"
-                max="100"
-                onChange={onAttackChange}
-                type="range"
-                value={attackSec}
-              />
-              <p>Attack {attackSec / 10}s</p>
-            </div>
+          <div className={styles.settings}>
+            <input
+              min="0"
+              max="100"
+              onChange={onAttackChange}
+              type="range"
+              value={attackSec}
+            />
+            <p>Attack {attackSec / 10}s</p>
           </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <input
-                min="0"
-                max="100"
-                onChange={onDecayChange}
-                type="range"
-                value={decaySec}
-              />
-              <p>Decay {decaySec / 10}s</p>
-            </div>
+          <div className={styles.settings}>
+            <input
+              min="0"
+              max="100"
+              onChange={onDecayChange}
+              type="range"
+              value={decaySec}
+            />
+            <p>Decay {decaySec / 10}s</p>
           </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <input
-                min="0"
-                max="100"
-                onChange={onSustainChange}
-                type="range"
-                value={sustainAmp}
-              />
-              <p>Sustain {sustainAmp}%</p>
-            </div>
+          <div className={styles.settings}>
+            <input
+              min="0"
+              max="100"
+              onChange={onSustainChange}
+              type="range"
+              value={sustainAmp}
+            />
+            <p>Sustain {sustainAmp}%</p>
           </div>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <input
-                min="0"
-                max="100"
-                onChange={onReleaseChange}
-                type="range"
-                value={releaseSec}
-              />
-              <p>Release {releaseSec / 10}s</p>
-            </div>
+          <div className={styles.settings}>
+            <input
+              min="0"
+              max="100"
+              onChange={onReleaseChange}
+              type="range"
+              value={releaseSec}
+            />
+            <p>Release {releaseSec / 10}s</p>
           </div>
-          <div style={{ alignItems: "center", display: "flex" }}>
+          <div className={styles.settings}>
+            <input
+              min="30"
+              max="10000"
+              onChange={onFilterChange}
+              type="range"
+              value={filterFreq}
+            />
+            <p>Lowpass {filterFreq}Hz</p>
+          </div>
+          <div className={styles.settings}>
             <p>How many bits? </p>
             <select
               defaultValue={16}
