@@ -1,6 +1,6 @@
-import { el, NodeRepr_t } from "@elemaudio/core";
+import { el } from "@elemaudio/core";
 import WebRenderer from "@elemaudio/web-renderer";
-import { useCallback, useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 
 type KeyPressMapType = { [key: string]: boolean };
 
@@ -63,12 +63,50 @@ function ToneProvider() {
   const [coreInitd, setCoreInitd] = useState<boolean>(false);
   const [keyPressMap, setKeyPressMap] = useState<KeyPressMapType>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [sliderValue, setSliderValue] = useState<number>(0);
+  const [bits, setBits] = useState(16);
+  const [attackSec, setAttackSec] = useState(1);
+  const [decaySec, setDecaySec] = useState(4);
+  const [sustainAmp, setSustainAmp] = useState(1);
+  const [releaseSec, setReleaseSec] = useState(4);
+  const [volume, setVolume] = useState(0.5);
 
-  const sineTone = useCallback((t: NodeRepr_t) => {
-    return el.sin(el.mul(2 * Math.PI, t));
+  const onVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setVolume(parseFloat(event.target.value) / 100);
   }, []);
 
-  const onSliderChange = useCallback(() => {}, []);
+  const onSliderChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setSliderValue(parseInt(event.target.value));
+  }, []);
+
+  const onAttackChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setAttackSec(parseInt(event.target.value));
+  }, []);
+
+  const onDecayChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setDecaySec(parseInt(event.target.value));
+  }, []);
+
+  const onSustainChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setSustainAmp(parseInt(event.target.value));
+    },
+    []
+  );
+
+  const onReleaseChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setReleaseSec(parseInt(event.target.value));
+    },
+    []
+  );
+
+  const onBitCrushSelect = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      setBits(parseInt(event.target.value));
+    },
+    []
+  );
 
   const playNote = useCallback(
     (event: KeyboardEvent) => {
@@ -123,18 +161,39 @@ function ToneProvider() {
 
   useEffect(() => {
     const tones = Object.keys(keyPressMap)
-      .filter((key) => keyPressMap[key] === true)
       .filter((key) => keyToMidiMap[key] !== undefined)
       .map((key) => {
-        const tone = el.cycle(keyToMidiMap[key]);
-        return tone;
+        let pressed = keyPressMap[key] === true;
+
+        let gate = el.const({ key: `${key}:gate`, value: pressed ? 1 : 0 });
+        let env = el.adsr(
+          attackSec / 10,
+          decaySec / 10,
+          sustainAmp / 100,
+          releaseSec / 10,
+          gate
+        );
+
+        const frequency = keyToMidiMap[key];
+        const sin = el.mul(
+          el.cycle(frequency),
+          el.const({ key: `${key}:sin`, value: 1 - sliderValue / 100 })
+        );
+        const saw = el.mul(
+          el.blepsaw(frequency),
+          el.const({ key: `${key}:saw`, value: sliderValue / 100 })
+        );
+        const combined = el.add(saw, sin);
+        // Step size is 2^bits
+        const step = Math.pow(2, bits);
+        // Crunchy amplitude quantization: floor at each step, then divide back
+        const crushed = el.div(el.floor(el.mul(combined, step)), step);
+        return el.mul(volume, env, crushed);
       });
     if (coreInitd) {
-      console.log(tones);
-      core.render(el.mul(0.2, el.add(...tones)));
+      core.render(el.add(...tones));
     }
-
-  }, [coreInitd, keyPressMap]);
+  }, [coreInitd, keyPressMap, volume, sliderValue, attackSec, decaySec, sustainAmp, releaseSec, bits]);
 
   return (
     <>
@@ -142,8 +201,87 @@ function ToneProvider() {
         <p>Press a key to load the audio context..</p>
       ) : (
         <>
-          <p>Race that Wav</p>
-          <input type="range" onChange={onSliderChange} />
+          <h2>Race that Wav</h2>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <p>Sine</p>
+            <input type="range" onChange={onSliderChange} value={sliderValue} />
+            <p>Saw</p>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <input
+                min="0"
+                max="100"
+                onChange={onVolumeChange}
+                type="range"
+                value={volume * 100}
+              />
+              <p>Volume {(volume * 100).toPrecision(3)}</p>
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <input
+                min="0"
+                max="100"
+                onChange={onAttackChange}
+                type="range"
+                value={attackSec}
+              />
+              <p>Attack {attackSec / 10}s</p>
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <input
+                min="0"
+                max="100"
+                onChange={onDecayChange}
+                type="range"
+                value={decaySec}
+              />
+              <p>Decay {decaySec / 10}s</p>
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <input
+                min="0"
+                max="100"
+                onChange={onSustainChange}
+                type="range"
+                value={sustainAmp}
+              />
+              <p>Sustain {sustainAmp}%</p>
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <input
+                min="0"
+                max="100"
+                onChange={onReleaseChange}
+                type="range"
+                value={releaseSec}
+              />
+              <p>Release {releaseSec / 10}s</p>
+            </div>
+          </div>
+          <div style={{ alignItems: "center", display: "flex" }}>
+            <p>How many bits? </p>
+            <select
+              defaultValue={16}
+              onChange={onBitCrushSelect}
+              onKeyDown={(event) => event?.preventDefault()}
+              style={{ height: "32px", marginLeft: "24px" }}
+            >
+              <option value={2}>2</option>
+              <option value={4}>4</option>
+              <option value={8}>8</option>
+              <option value={16}>16</option>
+              <option value={32}>32</option>
+            </select>
+          </div>
         </>
       )}
     </>
